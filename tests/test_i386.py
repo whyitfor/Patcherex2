@@ -11,6 +11,8 @@ import pytest
 
 from patcherex2 import *
 
+from qemu_commands import I386_COMMAND
+
 logging.getLogger("patcherex2").setLevel("DEBUG")
 
 
@@ -296,16 +298,11 @@ class Tests(unittest.TestCase):
         pipe = subprocess.PIPE
 
         with tempfile.TemporaryDirectory() as td:
-            tmp_file = os.path.join(td, "patched")
-            p = Patcherex(filepath)
-            for patch in patches:
-                p.patches.append(patch)
-            p.apply_patches()
-            p.binfmt_tool.save_binary(tmp_file)
+            tmp_file = self._apply_patch(filepath, patches, td)
             # os.system(f"readelf -hlS {tmp_file}")
 
             p = subprocess.Popen(
-                [tmp_file],
+                [*I386_COMMAND, tmp_file],
                 stdin=pipe,
                 stdout=pipe,
                 stderr=pipe,
@@ -323,6 +320,15 @@ class Tests(unittest.TestCase):
                         f"AssertionError: {p.returncode} != {expected_returnCode}, binary dumped: {self.dump_file(tmp_file)}"
                     )
                 # self.assertEqual(p.returncode, expected_returnCode)
+
+    def _apply_patch(self, filepath, patches, td):
+        tmp_file = os.path.join(td, "patched")
+        p = Patcherex(filepath)
+        for patch in patches:
+            p.patches.append(patch)
+        p.apply_patches()
+        p.binfmt_tool.save_binary(tmp_file)
+        return tmp_file
 
     def dump_file(self, file):
         shutil.copy(file, "/tmp/patcherex_failed_binary")
