@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import logging
-from typing import Dict, List, Optional, Union
 
 import angr
 from archinfo import ArchARM
@@ -14,6 +15,7 @@ class Angr(BinaryAnalyzer):
         self.binary_path = binary_path
         # self.use_pickle = kwargs.pop("use_pickle", False) # TODO: implement this
         self.angr_kwargs = kwargs.pop("angr_kwargs", {})
+        self.angr_cfg_kwargs = kwargs.pop("angr_cfg_kwargs", {})
         self._p = None
         self._cfg = None
         self._load_base = None
@@ -48,9 +50,10 @@ class Angr(BinaryAnalyzer):
     def cfg(self) -> angr.analyses.cfg.cfg_fast.CFGFast:
         if self._cfg is None:
             logger.info("Generating CFG with angr")
-            self._cfg = self.p.analyses.CFGFast(
-                normalize=True, data_references=True, force_complete_scan=False
-            )
+            if "normalize" not in self.angr_cfg_kwargs:
+                # NOTE: This will split basic blocks if another block jumps to the middle of the block
+                self.angr_cfg_kwargs["normalize"] = True
+            self._cfg = self.p.analyses.CFGFast(**self.angr_cfg_kwargs)
             logger.info("Generated CFG with angr")
         return self._cfg
 
@@ -64,33 +67,53 @@ class Angr(BinaryAnalyzer):
             return addr
         return file_addr
 
-    def get_basic_block(self, addr: int) -> Dict[str, Union[int, List[int]]]:
+    def get_basic_block(self, addr: int) -> dict[str, int | list[int]]:
+        # NOTE: angr splits basic blocks at call instructions, so we need to handle this
         if self.is_thumb(addr):
             addr += 1
         addr = self.denormalize_addr(addr)
-        bb = None
-        for node in self.cfg.model.nodes():
-            if addr in node.instruction_addrs:
-                bb = node
-                break
-        assert bb is not None
-        return {
-            "start": self.normalize_addr(bb.addr),
-            "end": self.normalize_addr(bb.addr + bb.size),
-            "size": bb.size,
-            "instruction_addrs": [
-                self.normalize_addr(addr)
-                - (1 if self.is_thumb(self.normalize_addr(addr)) else 0)
-                for addr in bb.instruction_addrs
-            ],
-        }
 
-    def get_instr_bytes_at(self, addr: int) -> angr.Block:
+        func = self.p.kb.functions.function(
+            self.cfg.model.get_any_node(addr, anyaddr=True).function_address
+        )
+        ri = self.p.analyses.RegionIdentifier(func)
+        graph = ri._graph.copy()
+        ri._make_supergraph(graph)
+
+        for multinode in graph.nodes():
+            nodes = multinode.nodes if hasattr(multinode, "nodes") else [multinode]
+            start = multinode.addr
+            size = sum(node.size for node in nodes)
+            end = start + size
+
+            instr_addrs = [
+                instr_addr
+                for node in nodes
+                for instr_addr in func.get_block(node.addr).instruction_addrs
+            ]
+
+            if addr in instr_addrs:
+                return {
+                    "start": self.normalize_addr(start),
+                    "end": self.normalize_addr(end),
+                    "size": size,
+                    "instruction_addrs": [
+                        self.normalize_addr(instr_addr)
+                        - (1 if self.is_thumb(self.normalize_addr(instr_addr)) else 0)
+                        for instr_addr in instr_addrs
+                    ],
+                }
+
+        raise Exception(f"Cannot find a block containing address {hex(addr)}")
+
+    def get_instr_bytes_at(self, addr: int, num_instr=1) -> angr.Block:
         addr += 1 if self.is_thumb(addr) else 0
         addr = self.denormalize_addr(addr)
-        return self.p.factory.block(addr, num_inst=1).bytes
+        # TODO: Special handling for delay slot, when there is a call instr with delay slot
+        # angr will return both instrs, even when num_instr is 1
+        return self.p.factory.block(addr, num_inst=num_instr).bytes
 
-    def get_unused_funcs(self) -> List[Dict[str, int]]:
+    def get_unused_funcs(self) -> list[dict[str, int]]:
         logger.info("Getting unused functions with angr")
         unused_funcs = []
         assert self.cfg is not None
@@ -110,7 +133,7 @@ class Angr(BinaryAnalyzer):
                 )
         return unused_funcs
 
-    def get_all_symbols(self) -> Dict[str, int]:
+    def get_all_symbols(self) -> dict[str, int]:
         assert self.cfg is not None
         logger.info("Getting all symbols with angr")
         symbols = {}
@@ -124,7 +147,7 @@ class Angr(BinaryAnalyzer):
             symbols[func.name] = self.normalize_addr(func.addr)
         return symbols
 
-    def get_function(self, name_or_addr: Union[int, str]) -> Optional[Dict[str, int]]:
+    def get_function(self, name_or_addr: int | str) -> dict[str, int] | None:
         assert self.cfg is not None
         if isinstance(name_or_addr, (str, int)):
             if isinstance(name_or_addr, int):

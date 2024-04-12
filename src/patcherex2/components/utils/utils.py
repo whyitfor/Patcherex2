@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Dict, Optional
+import re
 
 from ..allocation_managers.allocation_manager import MemoryFlag
 
@@ -17,7 +19,7 @@ class Utils:
         instrs: str,
         force_insert=False,
         detour_pos=-1,
-        symbols: Dict[str, int] = None,
+        symbols: dict[str, int] = None,
     ) -> None:
         logger.debug(f"Inserting trampoline code at {hex(addr)}: {instrs}")
         symbols = symbols if symbols else {}
@@ -62,8 +64,8 @@ class Utils:
         )
         if detour_pos == -1:
             trampoline_block = self.p.allocation_manager.allocate(
-                trampoline_size, align=0x4, flag=MemoryFlag.RX
-            )  # TODO: get alignment from arch info
+                trampoline_size, align=self.p.archinfo.alignment, flag=MemoryFlag.RX
+            )
             logger.debug(f"Allocated trampoline block: {trampoline_block}")
             mem_addr = trampoline_block.mem_addr
             file_addr = trampoline_block.file_addr
@@ -92,9 +94,7 @@ class Utils:
             self.p.binary_analyzer.mem_addr_to_file_offset(addr), jmp_to_trampoline
         )
 
-    def get_instrs_to_be_moved(
-        self, addr: int, ignore_unmovable=False
-    ) -> Optional[str]:
+    def get_instrs_to_be_moved(self, addr: int, ignore_unmovable=False) -> str | None:
         basic_block = self.p.binary_analyzer.get_basic_block(addr)
         idx = basic_block["instruction_addrs"].index(addr)
         end = addr + self.p.archinfo.jmp_size
@@ -126,10 +126,25 @@ class Utils:
 
     def is_movable_instruction(self, addr: int) -> bool:
         is_thumb = self.p.binary_analyzer.is_thumb(addr)
-        insn = self.p.binary_analyzer.get_instr_bytes_at(addr)
-        asm = self.p.disassembler.disassemble(insn, addr, is_thumb=is_thumb)[0]
-        asm = self.p.disassembler.to_asm_string(asm)
-        for addr in [0x0, 0x7F00000, 0xFE000000]:
-            if self.p.assembler.assemble(asm, addr, is_thumb=is_thumb) != insn:
+        insn_bytes = self.p.binary_analyzer.get_instr_bytes_at(addr)
+        disassembled = self.p.disassembler.disassemble(
+            insn_bytes, addr, is_thumb=is_thumb
+        )[0]
+        # if instruction use PC as a base register, it's not movable
+        tokens = re.split(r"\s|,|\[|\]", disassembled["op_str"])
+        tokens = list(filter(None, tokens))
+        if list(set(self.p.archinfo.pc_reg_names) & set(tokens)):
+            return False
+        # TODO: this assumes that keystone always gives abs addr when disassembling, but it might not be true
+        disassembled = self.p.disassembler.to_asm_string(disassembled)
+        for test_addr in [addr - 0x10000, addr + 0x10000]:
+            re_assembled = self.p.assembler.assemble(
+                disassembled, test_addr, is_thumb=is_thumb
+            )
+            re_disassembled = self.p.disassembler.disassemble(
+                re_assembled, test_addr, is_thumb=is_thumb
+            )[0]
+            re_disassembled = self.p.disassembler.to_asm_string(re_disassembled)
+            if re_disassembled != disassembled:
                 return False
         return True

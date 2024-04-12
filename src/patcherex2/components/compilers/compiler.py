@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import logging
 import os
 import subprocess
 import tempfile
-from typing import Dict, List, Optional
 
 import cle
 
@@ -17,8 +18,8 @@ class Compiler:
         self,
         code: str,
         base=0,
-        symbols: Optional[Dict[str, int]] = None,
-        extra_compiler_flags: Optional[List[str]] = None,
+        symbols: dict[str, int] | None = None,
+        extra_compiler_flags: list[str] | None = None,
         **kwargs,
     ) -> bytes:
         if symbols is None:
@@ -41,7 +42,7 @@ class Compiler:
                 # TODO: shouldn't put .rodata in .text, but otherwise switch case jump table won't work
                 # Note that even we don't include .rodata here, cle might still include it if there is
                 # no gap between .text and .rodata
-                + "; *(.text) *(.rodata) "
+                + "; *(.text) *(.rodata) *(.rodata.*)"
             )
             for name, addr in _symbols.items():
                 linker_script += name + " = " + hex(addr) + ";"

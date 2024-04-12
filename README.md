@@ -1,4 +1,4 @@
-# Patcherex 2
+# Patcherex2
 
 [![Latest Release](https://img.shields.io/pypi/v/patcherex2.svg)](https://pypi.python.org/pypi/patcherex2/)
 [![PyPI Statistics](https://img.shields.io/pypi/dm/patcherex2.svg)](https://pypistats.org/packages/patcherex2)
@@ -6,14 +6,11 @@
 )](https://github.com/purseclab/Patcherex2/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/purseclab/patcherex2.svg)](https://github.com/purseclab/Patcherex2/blob/main/LICENSE)
 
-> [!WARNING]
-> This project is currently in its initial development stages. Please anticipate potential breaking changes. The first stable release is targeted for early March 2024.
-
-Patcherex 2 is a rewritten adaptation of the original [Patcherex](https://github.com/angr/patcherex) project, aimed at building upon its core ideas and extending its capabilities.
+Patcherex2 is a rewritten adaptation of the original [Patcherex](https://github.com/angr/patcherex) project, aimed at building upon its core ideas and extending its capabilities.
 
 ## Installation
 
-Patcherex 2 is available on PyPI and can be installed using pip. Alternatively, you can use the provided Docker image.
+Patcherex2 is available on PyPI and can be installed using pip. Alternatively, you can use the provided Docker image.
 
 ### pip
 ```bash
@@ -36,16 +33,13 @@ docker run --rm -it -v ${PWD}:/workdir -w /workdir ghcr.io/purseclab/patcherex2
 <summary>Build from latest commit</summary>
 
 ```bash
-docker build -t patcherex2 https://github.com/purseclab/Patcherex2.git
+docker build -t --platform linux/amd64 patcherex2 https://github.com/purseclab/Patcherex2.git
 docker run --rm -it -v ${PWD}:/workdir -w /workdir patcherex2
 ```
 </details>
 
-
-
-## Usage
-
-Coming soon.
+## Documentation
+General documentation and API reference for Patcherex2 can be found at [purseclab.github.io/Patcherex2](https://purseclab.github.io/Patcherex2/).
 
 ## Supported Targets
 

@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import enum
 import logging
-from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +18,13 @@ class Block:
         self.size = size
         self.is_free = is_free
 
-    def __lt__(self, other: "Block") -> bool:
+    def __lt__(self, other: Block) -> bool:
         return self.addr < other.addr
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} addr={hex(self.addr)} size={hex(self.size)} is_free={self.is_free}>"
 
-    def coalesce(self, other: "Block") -> bool:
+    def coalesce(self, other: Block) -> bool:
         if self.is_free == other.is_free and self.addr + self.size == other.addr:
             self.size += other.size
             return True
@@ -61,13 +62,13 @@ class MappedBlock(Block):
         self.mem_addr = mem_addr
         self.flag = flag
 
-    def __lt__(self, other: "MappedBlock") -> bool:
+    def __lt__(self, other: MappedBlock) -> bool:
         return self.mem_addr < other.mem_addr
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} file_addr={hex(self.file_addr)} mem_addr={hex(self.mem_addr)} size={hex(self.size)} is_free={self.is_free} flag={str(self.flag)}>"
 
-    def coalesce(self, other: "MappedBlock") -> bool:
+    def coalesce(self, other: MappedBlock) -> bool:
         if (
             self.flag == other.flag
             and self.is_free == other.is_free
@@ -154,24 +155,35 @@ class AllocationManager:
     def _create_new_mapped_block(
         self, size: int, flag=MemoryFlag.RWX, align=0x1
     ) -> bool:
-        # map 0x1000 bytes # TODO: currently we won't use available file/mem blocks, instead we create new one at the end of the file
+        # TODO: currently we won't use available file/mem blocks, instead we create new one at the end of the file
         file_addr = None
         mem_addr = None
         for block in self.blocks[FileBlock]:
             if block.size == -1:
                 file_addr = block.addr
-                block.addr += 0x1000
+                block.addr += 0x2000
         for block in self.blocks[MemoryBlock]:
             if block.size == -1:
-                # mem_addr % 0x1000 should equal to file_addr % 0x1000 TODO
-                mem_addr = block.addr + (file_addr % 0x1000)
-                block.addr = mem_addr + 0x1000
+                # NOTE: mem_addr % p_align should equal to file_addr % p_align
+                # Check `man elf` and search for `p_align` for more information
+                # FIXME: shouldn't do any assumption on component type, reimpl in a better way
+                # FIXME: even worse, importing ELF will cause circular import
+                # TODO: consider merge allocation_manager and binfmt_tool into one component
+                if self.p.binfmt_tool.__class__.__name__ == "ELF":
+                    max_seg_align = max(
+                        [segment["p_align"] for segment in self.p.binfmt_tool._segments]
+                        + [0]
+                    )
+                    mem_addr = block.addr + (file_addr % max_seg_align)
+                else:
+                    mem_addr = block.addr + (file_addr % 0x1000)
+                block.addr = mem_addr + 0x2000
         if file_addr and mem_addr:
             self.add_block(
-                MappedBlock(file_addr, mem_addr, 0x1000, is_free=True, flag=flag)
+                MappedBlock(file_addr, mem_addr, 0x2000, is_free=True, flag=flag)
             )
             self.new_mapped_blocks.append(
-                MappedBlock(file_addr, mem_addr, 0x1000, is_free=True, flag=flag)
+                MappedBlock(file_addr, mem_addr, 0x2000, is_free=True, flag=flag)
             )
             return True
         return False
@@ -195,7 +207,7 @@ class AllocationManager:
         block.is_free = True
         self.coalesce(self.blocks[type(block)])
 
-    def coalesce(self, blocks: List[Block]) -> None:
+    def coalesce(self, blocks: list[Block]) -> None:
         for curr, next in zip(blocks, blocks[1:]):
             if curr.coalesce(next):
                 blocks.remove(next)

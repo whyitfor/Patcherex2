@@ -3,7 +3,11 @@ class Aarch64Info:
     nop_size = 4
     jmp_asm = "b {dst}"
     jmp_size = 4
+    alignment = 4
+    is_variable_length_isa = False
+    instr_size = 4
     call_asm = "bl {dst}"
+    pc_reg_names = ["pc", "ip"]
     save_context_asm = """
         sub sp, sp, #0x1f0
         stp x0, x1, [sp, #0x0]

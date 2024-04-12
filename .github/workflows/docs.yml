@@ -1,0 +1,35 @@
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Patcherex2
+        uses: ./.github/actions/install-patcherex2
+      - name: Build Docs
+        run: |
+          python3 -m pip install mkdocs mkdocstrings[python] mkdocs-material mkdocs-awesome-pages-plugin
+          python3 -m mkdocs build -d mkdocs_build -s
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: mkdocs_build
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

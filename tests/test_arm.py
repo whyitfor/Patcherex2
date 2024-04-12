@@ -160,7 +160,7 @@ class Tests(unittest.TestCase):
             [
                 RemoveInstructionPatch(0x1044B, num_bytes=4),
             ],
-            expected_output=b"\xF0\x20\xE3",
+            expected_output=b"\xf0\x20\xe3",
             expected_returnCode=0,
         )
 
@@ -170,7 +170,7 @@ class Tests(unittest.TestCase):
             [
                 RemoveInstructionPatch(0x5DE, num_bytes=4),
             ],
-            expected_output=b"\xF0\x20\xE3",
+            expected_output=b"\xf0\x20\xe3",
             expected_returnCode=0,
         )
 

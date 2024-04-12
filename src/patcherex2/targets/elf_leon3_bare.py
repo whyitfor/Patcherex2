@@ -31,30 +31,10 @@ class CustomElf(ELF):
         )
         self.p.allocation_manager.add_block(block)
 
-        unused_funcs = self.p.binary_analyzer.get_unused_funcs()
-
-        for func in unused_funcs:
-            file_offset = self.p.binary_analyzer.mem_addr_to_file_offset(func["addr"])
-            block = MappedBlock(
-                file_offset,
-                func["addr"],
-                func["size"],
-                is_free=True,
-                flag=MemoryFlag.RX,
-            )
-            self.p.allocation_manager.add_block(block)
-
 
 class ElfLeon3Bare(Target):
     @staticmethod
     def detect_target(binary_path):
-        with open(binary_path, "rb") as f:
-            magic = f.read(0x14)
-            # NOTE: probably should not default sparc to this target, but it's fine for now
-            if magic.startswith(b"\x7fELF") and magic.startswith(
-                b"\x00\x02", 0x12
-            ):  # EM_SPARC
-                return True
         return False
 
     def get_assembler(self, assembler):

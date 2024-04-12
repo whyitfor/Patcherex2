@@ -4,7 +4,11 @@ class Mips64Info:
     jmp_asm = "j {dst}"
     # NOTE: keystone will aldays add nop for branch delay slot, so include it in size
     jmp_size = 8
+    alignment = 4
+    is_variable_length_isa = False
+    instr_size = 4
     call_asm = "jal {dst}"
+    pc_reg_names = ["pc"]
     save_context_asm = """
     sub $sp, $sp, -248
     sd $ra, 240($sp)
